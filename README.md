@@ -199,11 +199,11 @@ ssh root@212.247.220.158 -p SSH_PORT
 ```bash
 cd /workspace/ai-setup
 git init
-git remote add origin https://github.com/YOUR_USERNAME/ai-setup.git
+git remote add origin https://github.com/armanisadeghi/ai-setup.git
 git add .
 git commit -m "Initial setup documentation"
 git push -u origin main
 ```
 
 Then in your Vast.ai instance template, set:
-- **On-start script**: `cd /workspace && git clone https://github.com/YOUR_USERNAME/ai-setup.git || (cd ai-setup && git pull) && bash ai-setup/scripts/startup.sh`
+- **On-start script**: `cd /workspace && git clone https://github.com/armanisadeghi/ai-setup.git || (cd ai-setup && git pull) && bash ai-setup/scripts/startup.sh`

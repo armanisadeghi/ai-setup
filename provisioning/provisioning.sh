@@ -5,7 +5,7 @@
 # This runs automatically every time the instance starts.
 # To use this: in your Vast.ai instance template, set the "On-start Script" to the
 # raw GitHub URL of this file, e.g.:
-#   https://raw.githubusercontent.com/YOUR_USERNAME/ai-setup/main/provisioning/provisioning.sh
+#   https://raw.githubusercontent.com/armanisadeghi/ai-setup/main/provisioning/provisioning.sh
 #
 # Or set the PROVISIONING_SCRIPT environment variable in your Vast.ai template.
 #
@@ -56,7 +56,7 @@ CONTROLNET_MODELS=()
 # =============================================================================
 # Clone/update this setup repo on every boot
 # =============================================================================
-SETUP_REPO="https://github.com/YOUR_USERNAME/ai-setup.git"
+SETUP_REPO="https://github.com/armanisadeghi/ai-setup.git"
 SETUP_DIR="${WORKSPACE}/ai-setup"
 
 # =============================================================================
@@ -67,7 +67,7 @@ function provisioning_start() {
     echo "=== Provisioning Start: $(date) ==="
 
     # Clone or update the setup repo
-    if [ -n "$SETUP_REPO" ] && [ "$SETUP_REPO" != "https://github.com/YOUR_USERNAME/ai-setup.git" ]; then
+    if [ -n "$SETUP_REPO" ]; then
         if [ -d "$SETUP_DIR/.git" ]; then
             echo "Updating setup repo..."
             cd "$SETUP_DIR" && git pull --quiet
