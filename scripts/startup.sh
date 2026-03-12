@@ -20,6 +20,12 @@ echo "  AI Server Startup Script"
 echo "  $(date)"
 echo "============================================="
 
+# --- Restore Git Config (ephemeral /root is wiped on restart) ---
+git config --global user.name "Arman Isadeghi"
+git config --global user.email "arman@armansadeghi.com"
+git config --global credential.helper "store --file /workspace/.git-credentials"
+echo "[✓] Git identity restored"
+
 # Activate Python environment
 source /venv/main/bin/activate
 echo "[✓] Python environment: $(python3 --version)"

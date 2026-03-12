@@ -24,3 +24,4 @@ __pycache__/
 secrets.sh
 *_key.txt
 *_token.txt
+/workspace/.git-credentials
