@@ -20,6 +20,15 @@ echo "  AI Server Startup Script"
 echo "  $(date)"
 echo "============================================="
 
+# --- Load Secrets (from persistent volume, never in git) ---
+if [ -f /workspace/.env_secrets ]; then
+    source /workspace/.env_secrets
+    echo "[✓] Secrets loaded from /workspace/.env_secrets"
+else
+    echo "[!] WARNING: /workspace/.env_secrets not found — HF, CivitAI, AWS keys not set"
+    echo "    Create it with your keys. See docs/secrets-setup.md"
+fi
+
 # --- Restore Git Config (ephemeral /root is wiped on restart) ---
 git config --global user.name "Arman Isadeghi"
 git config --global user.email "arman@armansadeghi.com"

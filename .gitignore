@@ -19,6 +19,19 @@ __pycache__/
 *.gguf
 *.pth
 
+# ComfyUI generated outputs — these go to S3, not git
+# Use: bash scripts/upload-outputs-to-s3.sh
+outputs/
+output/
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.mp4
+*.webm
+*.gif
+bash_history*.txt
+
 # Secrets / API keys
 .env
 secrets.sh
