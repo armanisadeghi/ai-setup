@@ -1,0 +1,26 @@
+# Git ignore for ai-setup repo
+
+# Don't commit workflow JSON files if they contain sensitive info
+# (Comment these out if you DO want to track workflows in git)
+# comfyui/workflows/*.json
+
+# Temp files
+*.tmp
+*.log
+__pycache__/
+*.pyc
+.DS_Store
+
+# Don't commit any model files if accidentally placed here
+*.safetensors
+*.ckpt
+*.pt
+*.bin
+*.gguf
+*.pth
+
+# Secrets / API keys
+.env
+secrets.sh
+*_key.txt
+*_token.txt

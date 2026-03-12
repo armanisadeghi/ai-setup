@@ -1,0 +1,19 @@
+# Extra Model Paths for ComfyUI
+# Copy this file to /workspace/ComfyUI/extra_model_paths.yaml
+# This tells ComfyUI to look for models in additional directories.
+# The startup script handles copying this automatically.
+
+# Example: if you store some models in a separate subfolder
+# or want to share a flat model directory structure.
+
+# comfyui:
+#   base_path: /workspace/ComfyUI/
+#   checkpoints: models/checkpoints/
+#   loras: models/loras/
+
+# Uncomment and customize if needed:
+# custom_model_store:
+#   base_path: /workspace/extra_models/
+#   checkpoints: checkpoints/
+#   loras: loras/
+#   vae: vae/
