@@ -9,30 +9,22 @@
 
 set -e
 
-COMFYUI_DIR="/workspace/ComfyUI"
+COMFYUI_DIR="/home/user/workspace/ComfyUI"
 NODES_DIR="$COMFYUI_DIR/custom_nodes"
 
 # --- Node List ---
 # Add/remove nodes here. ComfyUI-Manager is pre-installed by the base image.
 NODES=(
     # Video generation
-    # "https://github.com/kijai/ComfyUI-WanVideoWrapper"
-    # "https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite"
+    "https://github.com/kijai/ComfyUI-WanVideoWrapper"
+    "https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite"
 
     # Image utilities
-    # "https://github.com/cubiq/ComfyUI_essentials"
-    # "https://github.com/jags111/efficiency-nodes-comfyui"
-
-    # ControlNet / IP-Adapter
-    # "https://github.com/cubiq/ComfyUI_IPAdapter_plus"
+    "https://github.com/cubiq/ComfyUI_essentials"
 
     # Workflow quality of life
-    # "https://github.com/ltdrdata/ComfyUI-Impact-Pack"
-    # "https://github.com/pythongosssss/ComfyUI-Custom-Scripts"
-    # "https://github.com/rgthree/rgthree-comfy"
-
-    # Upscaling
-    # "https://github.com/ssitu/ComfyUI_UltimateSDUpscale"
+    "https://github.com/pythongosssss/ComfyUI-Custom-Scripts"
+    "https://github.com/rgthree/rgthree-comfy"
 )
 
 echo "[custom-nodes] Installing/updating ${#NODES[@]} nodes..."

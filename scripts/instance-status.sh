@@ -14,19 +14,19 @@ nvidia-smi --query-gpu=name,memory.total,memory.free,memory.used,temperature.gpu
 
 echo ""
 echo "--- Disk ---"
-df -h / /workspace 2>/dev/null
+df -h /
 
 echo ""
 echo "--- Model Storage ---"
-du -sh /workspace/ComfyUI/models/*/ 2>/dev/null | sort -h
+du -sh /home/user/workspace/ComfyUI/models/*/ 2>/dev/null | sort -h
 
 echo ""
-echo "--- HuggingFace Cache ---"
-du -sh /workspace/.hf_home/ 2>/dev/null || echo "(empty)"
+echo "--- ComfyUI ---"
+curl -s http://localhost:8188/system_stats 2>/dev/null | python3 -m json.tool 2>/dev/null | head -10 || echo "ComfyUI not responding"
 
 echo ""
-echo "--- Running Services ---"
-supervisorctl status 2>/dev/null || ps aux | grep -E "comfyui|jupyter|syncthing" | grep -v grep
+echo "--- Running Processes ---"
+ps aux | grep -E "comfyui|main.py|jupyter" | grep -v grep
 
 echo ""
 echo "--- ComfyUI Health ---"

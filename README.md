@@ -1,209 +1,204 @@
-# AI Server Setup — Vast.ai H200 Instance
+# AI Server Setup — Multi-Cloud GPU Instance
 
-This repo is the single source of truth for our Vast.ai AI server setup.
-Clone it immediately after spinning up a new instance and run `scripts/startup.sh` to be fully operational.
+This repo is the single source of truth for our AI server setup.
+Clone it on any new GPU instance and run `scripts/startup.sh` to be fully operational.
+
+S3 is used as the persistence layer — models, outputs, and configs sync to/from AWS S3
+so you can migrate between providers (Vast.ai, custom VMs, etc.) without re-downloading.
 
 ---
 
 ## Quick Start (New Instance)
 
 ```bash
-cd /workspace
-git clone https://github.com/YOUR_USERNAME/ai-setup.git
+cd /home/user
+git clone https://github.com/armanisadeghi/ai-setup.git
 cd ai-setup
 bash scripts/startup.sh
 ```
 
 ---
 
-## Instance Info
+## Current Instance
 
 | Field | Value |
 |-------|-------|
-| Provider | Vast.ai |
-| GPU | 1x NVIDIA H200 (140.4 GB VRAM) |
-| CPU | AMD EPYC 9554 64-Core (32 allocated) |
-| RAM | 193.5 GB (2 GB allocated to container overhead) |
-| CUDA | 12.9 (max 13.1) |
-| PyTorch | 2.9.1+cu128 |
-| Python | 3.12.12 |
-| Base Image | `vastai/comfy_v0.15.1-cuda-12.9-py312` |
-| Instance ID | 32752468 |
-| Machine ID | 53973 |
-| Datacenter | 355522 |
-| Public IP | 212.247.220.158 |
-| Cost | ~$2.49/hr (running) |
-| Volume ID | Local-32752467 |
+| Provider | Custom VM (Prague, Czech Republic) |
+| GPU | 1x NVIDIA A100-SXM4-80GB |
+| CPU | 8 cores |
+| RAM | 128 GiB |
+| Disk | 100 GiB (single volume, no separate persistent storage) |
+| CUDA | 12.6 |
+| PyTorch | 2.10.0+cu126 |
+| Python | 3.12.3 |
+| OS | Ubuntu 24.04.4 LTS |
+| Public IP | 80.188.223.202 |
+| Cost | ~$1.145/hr |
 
-> **Note:** The IP address and Instance ID change every time you spin up a new instance.
-> The GPU/machine may also change unless you use the same `Machine ID 53973` in your Vast.ai template.
+### Port Forwards
+
+| Service | Internal Port | External Port | URL |
+|---------|--------------|---------------|-----|
+| **SSH** | 22 | 10218 | `ssh -p 10218 user@80.188.223.202` |
+| **ComfyUI** | 8188 | 10246 | `http://80.188.223.202:10246` |
+| **API (8000)** | 8000 | 10241 | `http://80.188.223.202:10241` |
+| **API (8001)** | 8001 | 10242 | `http://80.188.223.202:10242` |
+| **Web (8080)** | 8080 | 10243 | `http://80.188.223.202:10243` |
+| **Web (3000)** | 3000 | 10244 | `http://80.188.223.202:10244` |
+| **Web (3001)** | 3001 | 10245 | `http://80.188.223.202:10245` |
+| **Jupyter** | 8888 | 10219 | `http://80.188.223.202:10219` |
 
 ---
 
-## Storage — The Most Important Thing to Understand
+## Storage — S3-Based Persistence
 
-This is a Docker container. There are **two storage areas** and understanding the difference will save you from losing work.
+This instance uses a single 100 GiB disk with no separate persistent volume.
+**AWS S3 is the persistence layer** — all important data syncs to S3 so you can
+destroy this instance and recreate it on any provider without losing work.
 
-### `/workspace` — PERSISTENT (2 TB) ✅ SAFE
-- Mounted from a physical block device (`Local-32752467`) on the host machine
-- **Survives instance stop/start and re-creation**
-- You pay for this storage 24/7 even when the server is off
-- This is where ALL models, custom nodes, outputs, and your work should live
-- **HuggingFace cache is here**: `/workspace/.hf_home`
-- **ComfyUI is here**: `/workspace/ComfyUI`
+### What Lives Where
 
-### `/` (Container Root) — EPHEMERAL (200 GB) ⚠️ LOST ON STOP
-- The Docker container's overlay filesystem
-- **DESTROYED when you stop or terminate the instance**
-- Contains the OS, Python venv (`/venv/main`), CUDA tools
-- The base image rebuilds all of this from the Vast.ai image on each startup
-- Do NOT put models or important work here
+| Data | Location | Backed to S3? |
+|------|----------|--------------|
+| Models (~45 GB) | `/home/user/workspace/ComfyUI/models/` | Yes → `s3://matrx-models/comfyui-models/` |
+| Outputs | `/home/user/workspace/ComfyUI/output/` | Yes → `s3://matrx-models/comfyui-outputs/` |
+| Workflows | `/home/user/workspace/ComfyUI/user/default/workflows/` | Yes (also in git) |
+| Secrets | `/home/user/workspace/.env_secrets` | Yes (encrypted) |
+| Scripts/Config | `/home/user/ai-setup/` | Git repo |
+| Python venv | `/home/user/workspace/.venv/` | No (recreated by startup.sh) |
 
-### What Survives a Stop/Start?
+### S3 Sync Commands
 
-| Location | Persists? | Notes |
-|----------|-----------|-------|
-| `/workspace/*` | ✅ Yes | Your persistent volume |
-| `/workspace/ComfyUI/` | ✅ Yes | ComfyUI code, models, nodes, outputs |
-| `/workspace/.hf_home/` | ✅ Yes | HuggingFace model cache |
-| `/root/` | ❌ No | Home dir is rebuilt from image |
-| `/venv/main/` | ❌ No | Python env is rebuilt from image |
-| `/opt/` | ❌ No | System tools, rebuilt from image |
-| `/tmp/` | ❌ No | Temp files |
+```bash
+# Check what would sync (dry run)
+bash /home/user/ai-setup/scripts/s3-sync.sh status
 
-> **The volume is "Local"**: The `Local-` prefix on our volume ID means the storage
-> lives on the same physical NVMe drives as the compute. It is NOT a cloud/network volume.
-> This means it can only be attached to instances running on Machine ID 53973.
-> If you ever rent a different machine, you'd need to migrate the volume data.
+# Pull models from S3 to local
+bash /home/user/ai-setup/scripts/s3-sync.sh pull
+
+# Push everything to S3 (before destroying instance)
+bash /home/user/ai-setup/scripts/s3-sync.sh push
+```
+
+### Disk Budget (100 GiB total)
+
+| Component | Size |
+|-----------|------|
+| OS + CUDA + packages | ~16 GiB |
+| Python venv (PyTorch) | ~8 GiB |
+| ComfyUI + custom nodes | ~1 GiB |
+| WAN 2.2 models (fp8) | ~45 GiB |
+| **Free for outputs** | **~29 GiB** |
 
 ---
 
 ## Directory Map
 
 ```
-/workspace/                          ← EVERYTHING important lives here
-├── ComfyUI/                         ← Main ComfyUI installation
-│   ├── models/                      ← All model weights
-│   │   ├── checkpoints/             ← Stable Diffusion checkpoints (.safetensors)
-│   │   ├── diffusion_models/        ← Flux, WAN Video, etc.
-│   │   ├── text_encoders/           ← T5, CLIP text encoders
-│   │   ├── vae/                     ← VAE models
-│   │   ├── loras/                   ← LoRA weights
-│   │   ├── controlnet/              ← ControlNet models
-│   │   └── upscale_models/          ← ESRGAN, etc.
-│   ├── custom_nodes/                ← Installed custom node extensions
-│   │   └── ComfyUI-Manager/         ← Node manager (pre-installed)
-│   ├── output/                      ← Generated images/videos go here
-│   ├── input/                       ← Input images/videos
-│   └── user/                        ← ComfyUI user data, saved workflows
-├── .hf_home/                        ← HuggingFace model cache (HF_HOME)
-├── .venv-backups/                   ← venv snapshot backups
+/home/user/
+├── workspace/                       ← Main working directory
+│   ├── .venv/                       ← Python virtual environment
+│   ├── .env_secrets                 ← API keys (AWS, HF, CivitAI)
+│   ├── comfyui.log                  ← ComfyUI runtime log
+│   └── ComfyUI/                     ← ComfyUI installation
+│       ├── models/
+│       │   ├── diffusion_models/    ← WAN 2.2 T2V/I2V models
+│       │   ├── text_encoders/       ← T5-XXL text encoder
+│       │   ├── clip_vision/         ← CLIP vision encoder
+│       │   ├── vae/                 ← VAE models
+│       │   ├── checkpoints/         ← SD checkpoints
+│       │   ├── loras/               ← LoRA weights
+│       │   └── controlnet/          ← ControlNet models
+│       ├── custom_nodes/            ← Installed custom nodes
+│       ├── output/                  ← Generated images/videos
+│       ├── input/                   ← Input images/videos
+│       └── user/default/workflows/  ← Saved workflows
 └── ai-setup/                        ← THIS REPO
-    ├── README.md                    ← You are here
-    ├── docs/                        ← Detailed documentation
-    ├── scripts/                     ← Startup and setup scripts
-    ├── comfyui/                     ← Our ComfyUI config and workflows
-    └── provisioning/                ← Vast.ai provisioning scripts
-
-/opt/workspace-internal/ComfyUI/     ← READ-ONLY base ComfyUI from Docker image
-/opt/model_store/                    ← Pre-baked models from base image (small set)
-/venv/main/                          ← Python virtual environment (EPHEMERAL)
+    ├── README.md
+    ├── docs/
+    ├── scripts/
+    │   ├── startup.sh               ← Master startup script
+    │   ├── safe-shutdown.sh         ← Pre-destroy S3 sync + git push
+    │   ├── s3-sync.sh               ← S3 pull/push/status
+    │   ├── install-custom-nodes.sh  ← Custom node installer
+    │   └── instance-status.sh       ← Quick status check
+    └── comfyui/
+        ├── workflows/               ← WAN 2.2 workflow JSONs
+        └── extra_model_paths.yaml
 ```
 
 ---
 
-## Services & Access
+## Services
 
-When the instance is running, these services are available through the instance's public IP.
-All ports are mapped through Vast.ai's port forwarding.
-
-| Service | External Port | URL Pattern |
-|---------|--------------|-------------|
-| **ComfyUI** | 8188 | `http://212.247.220.158:PORT` |
-| **Jupyter Lab** | 8080 | `http://212.247.220.158:PORT` |
-| **Instance Portal** | 1111 | `http://212.247.220.158:PORT` |
-| **API Wrapper** | 8288 | `http://212.247.220.158:PORT/docs` |
-| **Syncthing** | 8384 | `http://212.247.220.158:PORT` |
-
-> The external ports change with each new instance. Find the actual mapped ports in
-> the Vast.ai console under your instance's "Connect" info, or check `/etc/portal.yaml`.
-
----
-
-## What's Pre-Installed (Base Image)
-
-The `vastai/comfy_v0.15.1-cuda-12.9-py312` image provides:
-
-- **PyTorch** 2.9.1+cu128 (CUDA 12.8)
-- **xformers** 0.0.33
-- **transformers** 5.2.0
-- **ComfyUI** v0.15.1 (synced to `/workspace/ComfyUI` on first boot)
-- **ComfyUI-Manager** (pre-installed custom node)
-- **Jupyter Lab** (accessible on port 8080)
-- **Syncthing** (for file sync)
-- **Conda/Miniforge** at `/opt/miniforge3`
-- **NVM + Node.js** v24.12.0
-- **Vast CLI** at `/opt/vast-cli`
-
----
-
-## Environment Variables (Key Ones)
+ComfyUI runs as a systemd service and auto-starts on boot.
 
 ```bash
-DATA_DIRECTORY=/workspace/
-HF_HOME=/workspace/.hf_home
-COMFYUI_ARGS=--disable-auto-launch --disable-xformers --port 18188 --enable-cors-header
-CONDA_PREFIX=/venv/main
-CUDA_HOME=/usr/local/cuda
-PYTORCH_BACKEND=cu128
+# Check status
+sudo systemctl status comfyui
+
+# Restart
+sudo systemctl restart comfyui
+
+# View logs
+journalctl -u comfyui -f
+# or: tail -f /home/user/workspace/comfyui.log
 ```
 
 ---
 
-## How the Instance Starts Up
+## Installed Models
 
-1. Vast.ai pulls the Docker image and starts the container
-2. `/workspace` is mounted from the persistent volume
-3. If `/workspace/ComfyUI` doesn't exist, it's copied from `/opt/workspace-internal/ComfyUI`
-4. The provisioning script is downloaded and run (URL in `PROVISIONING_SCRIPT` env var)
-5. ComfyUI starts on internal port 18188 (mapped to external 8188)
-6. Jupyter starts on port 8080
-
-The `PROVISIONING_SCRIPT` env var (set in your Vast.ai instance template) controls what
-gets installed at boot. Point this to your own script to automate everything.
+| Model | Path | Size | Type |
+|-------|------|------|------|
+| WAN 2.2 T2V 14B fp8 (high noise) | `diffusion_models/` | 14.3 GB | Text-to-Video |
+| WAN 2.2 T2V 14B fp8 (low noise) | `diffusion_models/` | 14.3 GB | Text-to-Video |
+| WAN 2.2 5B combo (fp16) | `diffusion_models/` | 10.0 GB | T2V + I2V |
+| UMT5-XXL fp8 text encoder | `text_encoders/` | 6.7 GB | Text encoder |
+| WAN 2.2 VAE | `vae/` | 1.4 GB | VAE |
+| WAN 2.1 VAE | `vae/` | 0.25 GB | VAE |
+| CLIP Vision H | `clip_vision/` | 1.3 GB | Vision encoder |
 
 ---
 
 ## SSH Access
 
 ```bash
-ssh root@212.247.220.158 -p SSH_PORT
+ssh -p 10218 user@80.188.223.202
 ```
-
-> SSH port changes with each instance. Find it in the Vast.ai console.
-> Public key is set via the Vast.ai account SSH key settings.
 
 ---
 
 ## Docs Index
 
-- [docs/storage-guide.md](docs/storage-guide.md) — Deep dive on storage
-- [docs/comfyui-setup.md](docs/comfyui-setup.md) — ComfyUI configuration and nodes
-- [docs/wan-video-setup.md](docs/wan-video-setup.md) — WAN Video 2.2 installation guide
-- [docs/models-inventory.md](docs/models-inventory.md) — What models we have and where
+- [docs/storage-guide.md](docs/storage-guide.md) — Storage guide
+- [docs/comfyui-setup.md](docs/comfyui-setup.md) — ComfyUI configuration
+- [docs/wan-video-setup.md](docs/wan-video-setup.md) — WAN Video 2.2 guide
+- [docs/models-inventory.md](docs/models-inventory.md) — Model inventory
 
 ---
 
-## Repo Setup (First Time)
+## New Instance Setup (From Scratch)
 
 ```bash
-cd /workspace/ai-setup
-git init
-git remote add origin https://github.com/armanisadeghi/ai-setup.git
-git add .
-git commit -m "Initial setup documentation"
-git push -u origin main
-```
+# 1. SSH in
+ssh -p PORT user@IP
 
-Then in your Vast.ai instance template, set:
-- **On-start script**: `cd /workspace && git clone https://github.com/armanisadeghi/ai-setup.git || (cd ai-setup && git pull) && bash ai-setup/scripts/startup.sh`
+# 2. Install essentials
+sudo apt-get update && sudo apt-get install -y python3-pip python3-venv ffmpeg git-lfs
+
+# 3. Install AWS CLI
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+cd /tmp && unzip -q awscliv2.zip && sudo ./aws/install
+
+# 4. Clone this repo
+cd /home/user
+git clone https://github.com/armanisadeghi/ai-setup.git
+
+# 5. Set up secrets
+cp ai-setup/scripts/.env_secrets.template workspace/.env_secrets
+# Edit with your AWS/HF/CivitAI keys
+
+# 6. Run startup (creates venv, installs PyTorch, ComfyUI, pulls models from S3)
+bash ai-setup/scripts/startup.sh
+```

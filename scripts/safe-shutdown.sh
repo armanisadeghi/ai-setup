@@ -1,25 +1,22 @@
 #!/bin/bash
 # =============================================================================
-# safe-shutdown.sh — Run this BEFORE stopping the Vast.ai instance
+# safe-shutdown.sh — Run BEFORE destroying the GPU instance
 #
 # What it does:
-#   1. Saves any custom ComfyUI workflows you've created back to the repo
-#   2. Commits ALL changes (code, configs, scripts, docs, workflows)
-#   3. Pushes to GitHub (armanisadeghi/ai-setup, branch main)
-#   4. Confirms exactly what was saved and what to expect on restart
+#   1. Pushes all models, outputs, and configs to S3
+#   2. Saves workflows from ComfyUI back to the repo
+#   3. Commits and pushes all changes to GitHub
+#   4. Confirms what was saved
 #
 # Usage:
-#   bash /workspace/ai-setup/scripts/safe-shutdown.sh
-#   bash /workspace/ai-setup/scripts/safe-shutdown.sh "optional commit message"
-#
-# NOTE: This script does NOT shut down the instance. It only saves your work.
-#       After running it, stop the instance from the Vast.ai console.
+#   bash /home/user/ai-setup/scripts/safe-shutdown.sh
+#   bash /home/user/ai-setup/scripts/safe-shutdown.sh "optional commit message"
 # =============================================================================
 
 set -e
 
-WORKSPACE="/workspace"
-REPO_DIR="$WORKSPACE/ai-setup"
+WORKSPACE="/home/user/workspace"
+REPO_DIR="/home/user/ai-setup"
 COMFYUI_DIR="$WORKSPACE/ComfyUI"
 COMMIT_MSG="${1:-Pre-shutdown save: $(date '+%Y-%m-%d %H:%M')}"
 
@@ -29,26 +26,28 @@ echo "║           SAFE SHUTDOWN — Saving Everything              ║"
 echo "╚══════════════════════════════════════════════════════════╝"
 echo ""
 
-# --- Step 1: Restore git identity (may be lost if run fresh) ---
+# --- Step 1: Restore git identity ---
 git config --global user.name "Arman Isadeghi"
 git config --global user.email "arman@armansadeghi.com"
-git config --global credential.helper "store --file /workspace/.git-credentials"
-echo "[✓] Git identity ready"
+echo "[OK] Git identity ready"
 
-# --- Step 2: Upload ComfyUI outputs to S3 ---
+# --- Step 2: Upload everything to S3 ---
 echo ""
-echo "--- Uploading ComfyUI outputs to S3 ---"
-if bash "$REPO_DIR/scripts/upload-outputs-to-s3.sh" 2>&1; then
-    echo "[✓] Outputs uploaded to s3://matrx-models/comfyui-outputs/"
+echo "--- Uploading to S3 ---"
+if [ -f "$WORKSPACE/.env_secrets" ]; then
+    source "$WORKSPACE/.env_secrets"
+fi
+if [ -n "$AWS_ACCESS_KEY_ID" ]; then
+    bash "$REPO_DIR/scripts/s3-sync.sh" push 2>&1
+    echo "[OK] S3 push complete"
 else
-    echo "[!] S3 upload failed or skipped — outputs remain at $COMFYUI_DIR/output/ on this instance"
-    echo "    They are on the persistent /workspace volume so they won't be lost on stop/start."
-    echo "    Run manually later: bash $REPO_DIR/scripts/upload-outputs-to-s3.sh"
+    echo "[!] AWS credentials not set — skipping S3 push"
+    echo "    Models and outputs will be lost when this instance is destroyed!"
 fi
 
 # --- Step 3: Sync workflows from ComfyUI back to repo ---
 echo ""
-echo "--- Syncing workflows from ComfyUI → repo ---"
+echo "--- Syncing workflows from ComfyUI to repo ---"
 COMFYUI_WORKFLOWS="$COMFYUI_DIR/user/default/workflows"
 REPO_WORKFLOWS="$REPO_DIR/comfyui/workflows"
 
@@ -103,51 +102,28 @@ else
     echo "    Remote: $REMOTE_SHA"
 fi
 
-# --- Step 7: Display what's safe vs what's ephemeral ---
+# --- Step 7: Display summary ---
 echo ""
-echo "╔══════════════════════════════════════════════════════════╗"
-echo "║              SHUTDOWN SAFETY SUMMARY                    ║"
-echo "╚══════════════════════════════════════════════════════════╝"
+echo "============================================="
+echo "  SHUTDOWN SAFETY SUMMARY"
+echo "============================================="
 echo ""
-echo "✅ SAFE TO LOSE (will be restored on restart):"
-echo "   • Python venv, CUDA, OS packages (restored by base image)"
-echo "   • ComfyUI installation (in /workspace — it's PERSISTENT)"
-echo "   • Git config (restored by startup.sh)"
+echo "SAVED TO S3 ($S3_BUCKET):"
+echo "  - All models (comfyui-models/)"
+echo "  - All outputs (comfyui-outputs/)"
+echo "  - Workflows (comfyui-workflows/)"
+echo "  - Secrets (config/.env_secrets)"
 echo ""
-echo "✅ PERSISTS AUTOMATICALLY (on /workspace volume):"
-echo "   • All models in /workspace/ComfyUI/models/ (~$(du -sh $COMFYUI_DIR/models 2>/dev/null | cut -f1 || echo '?'))"
-echo "   • This repo in /workspace/ai-setup/"
-echo "   • Secrets in /workspace/.env_secrets"
-echo "   • Git credentials in /workspace/.git-credentials"
-echo "   • HuggingFace cache in /workspace/.hf_home/"
+echo "SAVED TO GITHUB:"
+echo "  - All scripts, configs, and docs"
+echo "  - Workflow JSON files"
+echo "  - AGENT_TASKS.md (task history)"
 echo ""
-echo "✅ SAVED TO GITHUB (just pushed):"
-echo "   • All scripts, configs, and docs"
-echo "   • All workflows (including any you created in ComfyUI)"
-echo "   • AGENT_TASKS.md (task history for next session)"
+echo "TO RESTORE ON A NEW INSTANCE:"
+echo "  1. Clone the repo"
+echo "  2. Set up .env_secrets with AWS creds"
+echo "  3. Run: bash /home/user/ai-setup/scripts/startup.sh"
+echo "  4. Models will auto-pull from S3"
 echo ""
-echo "✅ OUTPUTS UPLOADED TO S3:"
-echo "   • s3://matrx-models/comfyui-outputs/"
-echo "   • Images and videos are NOT in git — they go to S3 only"
-echo "   • To upload manually anytime: bash scripts/upload-outputs-to-s3.sh"
+echo "============================================="
 echo ""
-echo "⚠️  EPHEMERAL — WILL BE GONE ON RESTART:"
-echo "   • Bash history (save manually: history > /workspace/bash_history.txt)"
-echo "   • Any pip installs outside the venv (startup.sh reinstalls known ones)"
-echo "   • Custom nodes (startup.sh reinstalls from custom_nodes.txt)"
-echo "   • Any files under /tmp, /root (not /workspace)"
-echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ""
-echo "  NEXT STEPS:"
-echo "  1. ✅ This script is done — your work is saved"
-echo "  2. Go to Vast.ai console → click STOP on your instance"
-echo "  3. To restart: start the instance, then run:"
-echo "       bash /workspace/ai-setup/scripts/startup.sh"
-echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ""
-
-# Optional: Save bash history too
-history -w /workspace/bash_history_$(date +%Y%m%d).txt 2>/dev/null && \
-    echo "[~] Bash history saved to /workspace/bash_history_$(date +%Y%m%d).txt" || true
