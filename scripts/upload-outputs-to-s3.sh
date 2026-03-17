@@ -6,9 +6,9 @@
 #   s3://matrx-models/comfyui-outputs/
 #
 # Usage:
-#   bash /workspace/ai-setup/scripts/upload-outputs-to-s3.sh          # sync all
-#   bash /workspace/ai-setup/scripts/upload-outputs-to-s3.sh --dry-run  # preview only
-#   bash /workspace/ai-setup/scripts/upload-outputs-to-s3.sh --today    # today's files only
+#   bash scripts/upload-outputs-to-s3.sh          # sync all
+#   bash scripts/upload-outputs-to-s3.sh --dry-run  # preview only
+#   bash scripts/upload-outputs-to-s3.sh --today    # today's files only
 #
 # Runs automatically from safe-shutdown.sh before stopping the instance.
 # Can also be run any time manually, or on a cron schedule.
@@ -16,18 +16,13 @@
 
 set -e
 
-# --- Load secrets ---
-if [ -f /workspace/.env_secrets ]; then
-    source /workspace/.env_secrets
-else
-    echo "[!] ERROR: /workspace/.env_secrets not found"
-    echo "    AWS credentials are required. Cannot upload."
-    exit 1
-fi
+# --- Load centralized config ---
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../config/resolve-config.sh"
 
 # --- Validate credentials ---
 if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
-    echo "[!] ERROR: AWS_ACCESS_KEY_ID or AWS_SECRET_ACCESS_KEY not set in .env_secrets"
+    echo "[!] ERROR: AWS_ACCESS_KEY_ID or AWS_SECRET_ACCESS_KEY not set in $SECRETS_FILE"
     exit 1
 fi
 
@@ -36,7 +31,7 @@ export AWS_SECRET_ACCESS_KEY
 export AWS_DEFAULT_REGION="${AWS_REGION:-us-east-2}"
 
 BUCKET="${AWS_BUCKET_MODELS:-matrx-models}"
-OUTPUT_DIR="/workspace/ComfyUI/output"
+OUTPUT_DIR="$COMFYUI_DIR/output"
 S3_PREFIX="comfyui-outputs"
 DRY_RUN=""
 TODAY_ONLY=false

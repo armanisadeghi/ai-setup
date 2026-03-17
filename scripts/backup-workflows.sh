@@ -8,8 +8,12 @@
 
 set -e
 
-COMFYUI_WORKFLOWS="/workspace/ComfyUI/user/default/workflows"
-REPO_WORKFLOWS="/workspace/ai-setup/comfyui/workflows"
+# --- Load centralized config ---
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../config/resolve-config.sh"
+
+COMFYUI_WORKFLOWS="$COMFYUI_DIR/user/default/workflows"
+REPO_WORKFLOWS="$REPO_DIR/comfyui/workflows"
 
 mkdir -p "$REPO_WORKFLOWS"
 
@@ -26,7 +30,7 @@ cp "$COMFYUI_WORKFLOWS"/*.json "$REPO_WORKFLOWS/" 2>/dev/null || true
 echo "Workflows copied to $REPO_WORKFLOWS"
 echo ""
 echo "To commit and push:"
-echo "  cd /workspace/ai-setup"
+echo "  cd $REPO_DIR"
 echo "  git add comfyui/workflows/"
 echo "  git commit -m 'Backup workflows $(date +%Y-%m-%d)'"
 echo "  git push"

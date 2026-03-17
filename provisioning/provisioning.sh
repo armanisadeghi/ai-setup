@@ -10,9 +10,15 @@
 # Or set the PROVISIONING_SCRIPT environment variable in your Vast.ai template.
 #
 # This replaces the default provisioning from vast-ai/base-image.
+# NOTE: This file is Vast.ai-specific. For other providers, use scripts/startup.sh.
 # =============================================================================
 
-source /venv/main/bin/activate
+# On Vast.ai, /venv/main exists by default. On other platforms, fall back.
+if [ -f /venv/main/bin/activate ]; then
+    source /venv/main/bin/activate
+elif [ -f "${WORKSPACE:-.}/.venv/bin/activate" ]; then
+    source "$WORKSPACE/.venv/bin/activate"
+fi
 
 COMFYUI_DIR="${WORKSPACE}/ComfyUI"
 

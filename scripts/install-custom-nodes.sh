@@ -9,7 +9,10 @@
 
 set -e
 
-COMFYUI_DIR="/home/user/workspace/ComfyUI"
+# --- Load centralized config ---
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../config/resolve-config.sh"
+
 NODES_DIR="$COMFYUI_DIR/custom_nodes"
 
 # --- Node List ---

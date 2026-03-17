@@ -34,7 +34,11 @@ bash_history*.txt
 
 # Secrets / API keys
 .env
+.env_secrets
 secrets.sh
 *_key.txt
 *_token.txt
 /workspace/.git-credentials
+
+# Per-server config overrides (not committed)
+config/config.local.env

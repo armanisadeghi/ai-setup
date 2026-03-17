@@ -9,15 +9,16 @@
 #   4. Confirms what was saved
 #
 # Usage:
-#   bash /home/user/ai-setup/scripts/safe-shutdown.sh
-#   bash /home/user/ai-setup/scripts/safe-shutdown.sh "optional commit message"
+#   bash /path/to/ai-setup/scripts/safe-shutdown.sh
+#   bash /path/to/ai-setup/scripts/safe-shutdown.sh "optional commit message"
 # =============================================================================
 
 set -e
 
-WORKSPACE="/home/user/workspace"
-REPO_DIR="/home/user/ai-setup"
-COMFYUI_DIR="$WORKSPACE/ComfyUI"
+# --- Load centralized config ---
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../config/resolve-config.sh"
+
 COMMIT_MSG="${1:-Pre-shutdown save: $(date '+%Y-%m-%d %H:%M')}"
 
 echo ""
@@ -27,16 +28,13 @@ echo "╚═══════════════════════�
 echo ""
 
 # --- Step 1: Restore git identity ---
-git config --global user.name "Arman Isadeghi"
-git config --global user.email "arman@armansadeghi.com"
+git config --global user.name "$GIT_USER_NAME"
+git config --global user.email "$GIT_USER_EMAIL"
 echo "[OK] Git identity ready"
 
 # --- Step 2: Upload everything to S3 ---
 echo ""
 echo "--- Uploading to S3 ---"
-if [ -f "$WORKSPACE/.env_secrets" ]; then
-    source "$WORKSPACE/.env_secrets"
-fi
 if [ -n "$AWS_ACCESS_KEY_ID" ]; then
     bash "$REPO_DIR/scripts/s3-sync.sh" push 2>&1
     echo "[OK] S3 push complete"
@@ -122,7 +120,7 @@ echo ""
 echo "TO RESTORE ON A NEW INSTANCE:"
 echo "  1. Clone the repo"
 echo "  2. Set up .env_secrets with AWS creds"
-echo "  3. Run: bash /home/user/ai-setup/scripts/startup.sh"
+echo "  3. Run: bash scripts/startup.sh"
 echo "  4. Models will auto-pull from S3"
 echo ""
 echo "============================================="

@@ -2,11 +2,15 @@
 # =============================================================================
 # install-packages.sh — Install additional pip packages not in the base image
 #
-# These are re-installed on every startup since /venv/main is ephemeral.
+# These are re-installed on every startup since the venv may be ephemeral.
 # Keep this list minimal — only add what you actually need.
 # =============================================================================
 
-source /venv/main/bin/activate
+# --- Load centralized config ---
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../config/resolve-config.sh"
+
+source "$VENV/bin/activate"
 
 PACKAGES=(
     # Add packages here

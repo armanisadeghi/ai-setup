@@ -1,7 +1,7 @@
 # Extra Model Paths for ComfyUI
-# Copy this file to /workspace/ComfyUI/extra_model_paths.yaml
+# Copy this file to $COMFYUI_DIR/extra_model_paths.yaml
+# (startup.sh handles this automatically)
 # This tells ComfyUI to look for models in additional directories.
-# The startup script handles copying this automatically.
 
 # Example: if you store some models in a separate subfolder
 # or want to share a flat model directory structure.

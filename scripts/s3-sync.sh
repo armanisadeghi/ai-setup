@@ -13,22 +13,14 @@
 
 set -e
 
-WORKSPACE="/home/user/workspace"
-COMFYUI_DIR="$WORKSPACE/ComfyUI"
-REPO_DIR="/home/user/ai-setup"
-
-# Load secrets if not already in env
-if [ -z "$AWS_ACCESS_KEY_ID" ] && [ -f "$WORKSPACE/.env_secrets" ]; then
-    source "$WORKSPACE/.env_secrets"
-fi
-
-S3_BUCKET="${S3_BUCKET:-matrx-models}"
-S3_PREFIX="s3://$S3_BUCKET"
+# --- Load centralized config ---
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../config/resolve-config.sh"
 
 ACTION="${1:-status}"
 
 if [ -z "$AWS_ACCESS_KEY_ID" ]; then
-    echo "[!] AWS_ACCESS_KEY_ID not set. Configure $WORKSPACE/.env_secrets"
+    echo "[!] AWS_ACCESS_KEY_ID not set. Configure $SECRETS_FILE"
     exit 1
 fi
 

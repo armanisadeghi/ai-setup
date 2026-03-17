@@ -1,180 +1,154 @@
-# AI Server Setup — Multi-Cloud GPU Instance
+# AI Server Setup — Multi-Cloud GPU Instances
 
-This repo is the single source of truth for our AI server setup.
-Clone it on any new GPU instance and run `scripts/startup.sh` to be fully operational.
+Central repo for deploying AI workloads (ComfyUI, LLM experiments) across ephemeral GPU instances.
+Clone on any new server and run `scripts/startup.sh` to be fully operational.
 
-S3 is used as the persistence layer — models, outputs, and configs sync to/from AWS S3
-so you can migrate between providers (Vast.ai, custom VMs, etc.) without re-downloading.
+**S3 is the persistence layer** — models, outputs, and configs sync to/from AWS S3 so you can
+migrate between providers (Vast.ai, bare-metal VMs, RunPod, etc.) without re-downloading.
 
 ---
 
 ## Quick Start (New Instance)
 
 ```bash
-cd /home/user
+# 1. Clone the repo (use HTTPS or your PAT)
 git clone https://github.com/armanisadeghi/ai-setup.git
 cd ai-setup
+
+# 2. Create your secrets file (see config section below)
+cp config/env_secrets.template  "$WORKSPACE/.env_secrets"    # or wherever $WORKSPACE is
+# Then edit .env_secrets with your real keys
+
+# 3. Run startup
 bash scripts/startup.sh
 ```
 
----
-
-## Current Instance
-
-| Field | Value |
-|-------|-------|
-| Provider | Custom VM (Prague, Czech Republic) |
-| GPU | 1x NVIDIA A100-SXM4-80GB |
-| CPU | 8 cores |
-| RAM | 128 GiB |
-| Disk | 100 GiB (single volume, no separate persistent storage) |
-| CUDA | 12.6 |
-| PyTorch | 2.10.0+cu126 |
-| Python | 3.12.3 |
-| OS | Ubuntu 24.04.4 LTS |
-| Public IP | 80.188.223.202 |
-| Cost | ~$1.145/hr |
-
-### Port Forwards
-
-| Service | Internal Port | External Port | URL |
-|---------|--------------|---------------|-----|
-| **SSH** | 22 | 10218 | `ssh -p 10218 user@80.188.223.202` |
-| **ComfyUI** | 8188 | 10246 | `http://80.188.223.202:10246` |
-| **API (8000)** | 8000 | 10241 | `http://80.188.223.202:10241` |
-| **API (8001)** | 8001 | 10242 | `http://80.188.223.202:10242` |
-| **Web (8080)** | 8080 | 10243 | `http://80.188.223.202:10243` |
-| **Web (3000)** | 3000 | 10244 | `http://80.188.223.202:10244` |
-| **Web (3001)** | 3001 | 10245 | `http://80.188.223.202:10245` |
-| **Jupyter** | 8888 | 10219 | `http://80.188.223.202:10219` |
+`startup.sh` auto-detects paths, creates a venv if needed, installs ComfyUI + custom nodes,
+syncs workflows, and pulls models from S3.
 
 ---
 
-## Storage — S3-Based Persistence
+## Configuration System
 
-This instance uses a single 100 GiB disk with no separate persistent volume.
-**AWS S3 is the persistence layer** — all important data syncs to S3 so you can
-destroy this instance and recreate it on any provider without losing work.
+All scripts source `config/resolve-config.sh` which resolves settings in this order
+(later wins):
 
-### What Lives Where
+1. **`config/defaults.env`** — shared defaults (committed to git)
+2. **`config/config.local.env`** — per-server overrides (gitignored)
+3. **`$WORKSPACE/.env_secrets`** — secrets on the machine (gitignored)
+4. **Auto-detection** — fills anything still unset (WORKSPACE, VENV, CUDA, etc.)
 
-| Data | Location | Backed to S3? |
-|------|----------|--------------|
-| Models (~45 GB) | `/home/user/workspace/ComfyUI/models/` | Yes → `s3://matrx-models/comfyui-models/` |
-| Outputs | `/home/user/workspace/ComfyUI/output/` | Yes → `s3://matrx-models/comfyui-outputs/` |
-| Workflows | `/home/user/workspace/ComfyUI/user/default/workflows/` | Yes (also in git) |
-| Secrets | `/home/user/workspace/.env_secrets` | Yes (encrypted) |
-| Scripts/Config | `/home/user/ai-setup/` | Git repo |
-| Python venv | `/home/user/workspace/.venv/` | No (recreated by startup.sh) |
+### Auto-Detected Paths
 
-### S3 Sync Commands
+| Variable | Vast.ai | Bare VM (typical) |
+|----------|---------|-------------------|
+| `WORKSPACE` | `/workspace` | `$HOME/workspace` |
+| `VENV` | `/venv/main` | `$WORKSPACE/.venv` |
+| `COMFYUI_DIR` | `$WORKSPACE/ComfyUI` | `$WORKSPACE/ComfyUI` |
+| `PYTORCH_INDEX_URL` | Based on CUDA version | Based on CUDA version |
+
+To override any of these, set them in `config/config.local.env`.
+
+### Secrets (`.env_secrets`)
+
+Place this file in `$WORKSPACE/.env_secrets` on each server:
+
+```bash
+AWS_ACCESS_KEY_ID=...
+AWS_SECRET_ACCESS_KEY=...
+HF_TOKEN=...
+CIVITAI_API_KEY=...
+GIT_PAT=...
+```
+
+---
+
+## S3 Persistence
 
 ```bash
 # Check what would sync (dry run)
-bash /home/user/ai-setup/scripts/s3-sync.sh status
+bash scripts/s3-sync.sh status
 
 # Pull models from S3 to local
-bash /home/user/ai-setup/scripts/s3-sync.sh pull
+bash scripts/s3-sync.sh pull
 
 # Push everything to S3 (before destroying instance)
-bash /home/user/ai-setup/scripts/s3-sync.sh push
+bash scripts/s3-sync.sh push
 ```
 
-### Disk Budget (100 GiB total)
-
-| Component | Size |
-|-----------|------|
-| OS + CUDA + packages | ~16 GiB |
-| Python venv (PyTorch) | ~8 GiB |
-| ComfyUI + custom nodes | ~1 GiB |
-| WAN 2.2 models (fp8) | ~45 GiB |
-| **Free for outputs** | **~29 GiB** |
+| S3 Path | Contents |
+|---------|----------|
+| `s3://matrx-models/comfyui-models/` | Model weights |
+| `s3://matrx-models/comfyui-outputs/` | Generated images/videos |
+| `s3://matrx-models/comfyui-workflows/` | Workflow JSONs |
+| `s3://matrx-models/config/` | Encrypted secrets backup |
 
 ---
 
-## Directory Map
+## Directory Map (relative to `$WORKSPACE`)
 
 ```
-/home/user/
-├── workspace/                       ← Main working directory
-│   ├── .venv/                       ← Python virtual environment
-│   ├── .env_secrets                 ← API keys (AWS, HF, CivitAI)
-│   ├── comfyui.log                  ← ComfyUI runtime log
-│   └── ComfyUI/                     ← ComfyUI installation
-│       ├── models/
-│       │   ├── diffusion_models/    ← WAN 2.2 T2V/I2V models
-│       │   ├── text_encoders/       ← T5-XXL text encoder
-│       │   ├── clip_vision/         ← CLIP vision encoder
-│       │   ├── vae/                 ← VAE models
-│       │   ├── checkpoints/         ← SD checkpoints
-│       │   ├── loras/               ← LoRA weights
-│       │   └── controlnet/          ← ControlNet models
-│       ├── custom_nodes/            ← Installed custom nodes
-│       ├── output/                  ← Generated images/videos
-│       ├── input/                   ← Input images/videos
-│       └── user/default/workflows/  ← Saved workflows
-└── ai-setup/                        ← THIS REPO
-    ├── README.md
-    ├── docs/
-    ├── scripts/
-    │   ├── startup.sh               ← Master startup script
-    │   ├── safe-shutdown.sh         ← Pre-destroy S3 sync + git push
-    │   ├── s3-sync.sh               ← S3 pull/push/status
-    │   ├── install-custom-nodes.sh  ← Custom node installer
-    │   └── instance-status.sh       ← Quick status check
-    └── comfyui/
-        ├── workflows/               ← WAN 2.2 workflow JSONs
-        └── extra_model_paths.yaml
-```
+$WORKSPACE/
+├── .venv/                       ← Python virtual environment (or /venv/main on Vast.ai)
+├── .env_secrets                 ← API keys (AWS, HF, CivitAI) — gitignored
+├── comfyui.log                  ← ComfyUI runtime log
+└── ComfyUI/
+    ├── models/
+    │   ├── diffusion_models/    ← WAN 2.2 T2V/I2V models
+    │   ├── text_encoders/       ← T5-XXL text encoder
+    │   ├── clip_vision/         ← CLIP vision encoder
+    │   ├── vae/                 ← VAE models
+    │   ├── checkpoints/         ← SD checkpoints
+    │   ├── loras/               ← LoRA weights
+    │   └── controlnet/          ← ControlNet models
+    ├── custom_nodes/            ← Installed custom nodes
+    ├── output/                  ← Generated images/videos
+    ├── input/                   ← Input images/videos
+    └── user/default/workflows/  ← Saved workflows
 
----
-
-## Services
-
-ComfyUI runs as a systemd service and auto-starts on boot.
-
-```bash
-# Check status
-sudo systemctl status comfyui
-
-# Restart
-sudo systemctl restart comfyui
-
-# View logs
-journalctl -u comfyui -f
-# or: tail -f /home/user/workspace/comfyui.log
+ai-setup/                        ← THIS REPO
+├── README.md
+├── config/
+│   ├── resolve-config.sh        ← Central config resolver (sourced by all scripts)
+│   ├── defaults.env             ← Shared defaults (in git)
+│   └── config.local.env         ← Per-server overrides (gitignored)
+├── scripts/
+│   ├── startup.sh               ← Master startup script
+│   ├── safe-shutdown.sh         ← Pre-destroy S3 sync + git push
+│   ├── s3-sync.sh               ← S3 pull/push/status
+│   ├── install-custom-nodes.sh  ← Custom node installer
+│   ├── install-packages.sh      ← Extra pip packages
+│   ├── download-wan-video.sh    ← WAN Video model downloader
+│   ├── backup-workflows.sh      ← Backup workflows to repo
+│   ├── upload-outputs-to-s3.sh  ← Upload outputs to S3
+│   └── instance-status.sh       ← Quick status check
+├── comfyui/
+│   ├── workflows/               ← WAN 2.2 workflow JSONs
+│   └── extra_model_paths.yaml
+├── provisioning/
+│   └── provisioning.sh          ← Vast.ai auto-provisioning
+└── docs/
+    ├── server-registry.md       ← Known server instances
+    ├── models-inventory.md      ← Model inventory
+    ├── storage-guide.md         ← Storage strategy
+    ├── comfyui-setup.md         ← ComfyUI configuration
+    └── wan-video-setup.md       ← WAN Video 2.2 guide
 ```
 
 ---
 
-## Installed Models
+## Scripts Reference
 
-| Model | Path | Size | Type |
-|-------|------|------|------|
-| WAN 2.2 T2V 14B fp8 (high noise) | `diffusion_models/` | 14.3 GB | Text-to-Video |
-| WAN 2.2 T2V 14B fp8 (low noise) | `diffusion_models/` | 14.3 GB | Text-to-Video |
-| WAN 2.2 5B combo (fp16) | `diffusion_models/` | 10.0 GB | T2V + I2V |
-| UMT5-XXL fp8 text encoder | `text_encoders/` | 6.7 GB | Text encoder |
-| WAN 2.2 VAE | `vae/` | 1.4 GB | VAE |
-| WAN 2.1 VAE | `vae/` | 0.25 GB | VAE |
-| CLIP Vision H | `clip_vision/` | 1.3 GB | Vision encoder |
-
----
-
-## SSH Access
-
-```bash
-ssh -p 10218 user@80.188.223.202
-```
-
----
-
-## Docs Index
-
-- [docs/storage-guide.md](docs/storage-guide.md) — Storage guide
-- [docs/comfyui-setup.md](docs/comfyui-setup.md) — ComfyUI configuration
-- [docs/wan-video-setup.md](docs/wan-video-setup.md) — WAN Video 2.2 guide
-- [docs/models-inventory.md](docs/models-inventory.md) — Model inventory
+| Script | Purpose |
+|--------|---------|
+| `startup.sh` | Full setup: venv, ComfyUI, nodes, workflows, S3 pull, launch |
+| `safe-shutdown.sh` | S3 push, workflow backup, git commit+push — run before destroying |
+| `s3-sync.sh pull\|push\|status` | Sync models/outputs/workflows to/from S3 |
+| `instance-status.sh` | Quick GPU/disk/ComfyUI health check |
+| `install-custom-nodes.sh` | Install/update custom nodes from the NODES array |
+| `download-wan-video.sh` | Download WAN 2.2 models from HuggingFace |
+| `upload-outputs-to-s3.sh` | Upload generated outputs to S3 |
+| `backup-workflows.sh` | Copy workflows from ComfyUI to repo |
 
 ---
 
@@ -184,21 +158,35 @@ ssh -p 10218 user@80.188.223.202
 # 1. SSH in
 ssh -p PORT user@IP
 
-# 2. Install essentials
+# 2. Install essentials (skip if the base image has them)
 sudo apt-get update && sudo apt-get install -y python3-pip python3-venv ffmpeg git-lfs
 
 # 3. Install AWS CLI
 curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
-cd /tmp && unzip -q awscliv2.zip && sudo ./aws/install
+cd /tmp && unzip -q awscliv2.zip && sudo ./aws/install && cd -
 
 # 4. Clone this repo
-cd /home/user
 git clone https://github.com/armanisadeghi/ai-setup.git
+cd ai-setup
 
 # 5. Set up secrets
-cp ai-setup/scripts/.env_secrets.template workspace/.env_secrets
-# Edit with your AWS/HF/CivitAI keys
+# Create $WORKSPACE/.env_secrets with your keys (see config section above)
 
-# 6. Run startup (creates venv, installs PyTorch, ComfyUI, pulls models from S3)
-bash ai-setup/scripts/startup.sh
+# 6. Run startup — handles everything else
+bash scripts/startup.sh
 ```
+
+---
+
+## Server Registry
+
+See [docs/server-registry.md](docs/server-registry.md) for a list of all known server instances
+(providers, specs, access details).
+
+## Docs Index
+
+- [docs/server-registry.md](docs/server-registry.md) — Known server instances
+- [docs/storage-guide.md](docs/storage-guide.md) — Storage strategy
+- [docs/comfyui-setup.md](docs/comfyui-setup.md) — ComfyUI configuration
+- [docs/wan-video-setup.md](docs/wan-video-setup.md) — WAN Video 2.2 guide
+- [docs/models-inventory.md](docs/models-inventory.md) — Model inventory

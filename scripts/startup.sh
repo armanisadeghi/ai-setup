@@ -3,39 +3,40 @@
 # startup.sh — Master startup script for GPU instance
 #
 # Run this after spinning up a new instance or after a reboot:
-#   bash /home/user/ai-setup/scripts/startup.sh
+#   bash /path/to/ai-setup/scripts/startup.sh
 #
 # This script is idempotent — safe to run multiple times.
 # =============================================================================
 
 set -e
 
-WORKSPACE="/home/user/workspace"
-COMFYUI_DIR="$WORKSPACE/ComfyUI"
-REPO_DIR="/home/user/ai-setup"
-VENV="$WORKSPACE/.venv"
+# --- Load centralized config (auto-detects paths, secrets, CUDA, etc.) ---
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../config/resolve-config.sh"
 
 echo "============================================="
 echo "  AI Server Startup Script"
 echo "  $(date)"
 echo "============================================="
+echo "[config] WORKSPACE=$WORKSPACE"
+echo "[config] COMFYUI_DIR=$COMFYUI_DIR"
+echo "[config] VENV=$VENV"
 
-# --- Load Secrets ---
-if [ -f "$WORKSPACE/.env_secrets" ]; then
-    source "$WORKSPACE/.env_secrets"
-    echo "[OK] Secrets loaded from $WORKSPACE/.env_secrets"
+# --- Secrets check ---
+if [ -n "$AWS_ACCESS_KEY_ID" ]; then
+    echo "[OK] Secrets loaded from $SECRETS_FILE"
 else
-    echo "[!] WARNING: $WORKSPACE/.env_secrets not found"
-    echo "    Create it with your AWS/HF/CivitAI keys"
+    echo "[!] WARNING: AWS credentials not found"
+    echo "    Create $SECRETS_FILE with your AWS/HF/CivitAI keys"
 fi
 
 # --- Git Config ---
-git config --global user.name "Arman Isadeghi"
-git config --global user.email "arman@armansadeghi.com"
+git config --global user.name "$GIT_USER_NAME"
+git config --global user.email "$GIT_USER_EMAIL"
 echo "[OK] Git identity configured"
 
 # --- Activate Python environment ---
-if [ -d "$VENV" ]; then
+if [ -d "$VENV" ] && [ -f "$VENV/bin/activate" ]; then
     source "$VENV/bin/activate"
     echo "[OK] Python environment: $(python3 --version)"
 else
@@ -43,7 +44,7 @@ else
     python3 -m venv "$VENV"
     source "$VENV/bin/activate"
     pip install --upgrade pip setuptools wheel
-    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
+    pip install torch torchvision torchaudio --index-url "$PYTORCH_INDEX_URL"
     echo "[OK] Created new venv with PyTorch"
 fi
 
@@ -123,6 +124,6 @@ echo ""
 echo "Model storage:"
 du -sh "$COMFYUI_DIR/models/"*/ 2>/dev/null | grep -v "^0" | sort -h || echo "  (no models yet)"
 echo ""
-echo "ComfyUI: http://80.188.223.202:10246"
+echo "ComfyUI: http://localhost:$COMFYUI_PORT"
 echo "Log:     tail -f $WORKSPACE/comfyui.log"
 echo ""
