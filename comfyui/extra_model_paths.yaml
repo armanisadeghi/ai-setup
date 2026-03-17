@@ -1,19 +1,26 @@
 # Extra Model Paths for ComfyUI
-# Copy this file to $COMFYUI_DIR/extra_model_paths.yaml
-# (startup.sh handles this automatically)
-# This tells ComfyUI to look for models in additional directories.
+# Copied to $COMFYUI_DIR/extra_model_paths.yaml by startup.sh
+#
+# This adds the S3-mounted model directory so ComfyUI sees ALL models
+# (both local on disk and stored in S3) in a unified UI.
+#
+# Local models (in $COMFYUI_DIR/models/) load instantly.
+# S3 models (in /mnt/s3-models/) stream on demand — first load is slower,
+# subsequent loads use the local cache at /tmp/s3fs-cache.
 
-# Example: if you store some models in a separate subfolder
-# or want to share a flat model directory structure.
-
-# comfyui:
-#   base_path: /workspace/ComfyUI/
-#   checkpoints: models/checkpoints/
-#   loras: models/loras/
-
-# Uncomment and customize if needed:
-# custom_model_store:
-#   base_path: /workspace/extra_models/
-#   checkpoints: checkpoints/
-#   loras: loras/
-#   vae: vae/
+s3_shared_models:
+    base_path: /mnt/s3-models/comfyui-models/
+    checkpoints: checkpoints/
+    loras: loras/
+    vae: vae/
+    clip: clip/
+    clip_vision: clip_vision/
+    diffusion_models: diffusion_models/
+    text_encoders: text_encoders/
+    controlnet: controlnet/
+    embeddings: embeddings/
+    upscale_models: upscale_models/
+    hypernetworks: hypernetworks/
+    style_models: style_models/
+    gligen: gligen/
+    audio_encoders: audio_encoders/

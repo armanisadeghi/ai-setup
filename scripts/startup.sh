@@ -84,15 +84,25 @@ if [ -d "$REPO_DIR/comfyui/workflows" ]; then
     echo "[OK] Workflows synced (existing files not overwritten)"
 fi
 
-# --- Sync models from S3 (if configured) ---
+# --- Mount S3 models (shared model library) ---
 echo ""
-echo "--- S3 Model Sync ---"
+echo "--- S3 Model Mount ---"
+if [ -n "$AWS_ACCESS_KEY_ID" ]; then
+    bash "$REPO_DIR/scripts/mount-s3.sh" mount 2>&1 || echo "[!] S3 mount failed — models only available locally"
+else
+    echo "[!] AWS credentials not configured — skipping S3 mount"
+    echo "    Set credentials in $SECRETS_FILE"
+fi
+
+# --- Sync critical models from S3 to local (for speed) ---
+echo ""
+echo "--- S3 Model Sync (local cache) ---"
 if [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$S3_BUCKET" ]; then
     echo "Checking S3 for models..."
     bash "$REPO_DIR/scripts/s3-sync.sh" pull 2>&1 || echo "[!] S3 sync failed or skipped"
 else
     echo "[!] AWS credentials not configured — skipping S3 sync"
-    echo "    Set credentials in $WORKSPACE/.env_secrets"
+    echo "    Set credentials in $SECRETS_FILE"
 fi
 
 # --- Start ComfyUI ---
